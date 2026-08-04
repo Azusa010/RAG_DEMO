@@ -12,7 +12,7 @@ from typing import Tuple, List, Dict, Deque
 from langchain.chat_models import init_chat_model
 
 from processor.import_processor.base import BaseNode, setup_logging
-from processor.import_processor.configs.lm_config import lm_config
+from configs.lm_config import lm_config
 from processor.import_processor.exceptions import StateFieldError, FileProcessingError
 from processor.import_processor.state import ImportGraphState
 

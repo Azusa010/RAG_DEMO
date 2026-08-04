@@ -1,14 +1,19 @@
 import json
+import logging
 
 from minio import Minio
-from processor.import_processor.configs.minio_config import minio_config
+from configs.minio_config import minio_config
+from processor.import_processor.base import setup_logging
+
+setup_logging()
 
 try:
     client = Minio(
         endpoint=minio_config.endpoint,
         access_key=minio_config.access_key,
         secret_key=minio_config.secret_key,
-        secure=False)
+        secure=False
+    )
     if not client.bucket_exists(minio_config.bucket_name):
         client.make_bucket(minio_config.bucket_name)
 
@@ -18,8 +23,8 @@ try:
             {
                 "Effect": "Allow",
                 "Principal": {"AWS": ["*"]},
-                "Action": ["s3:GetObject"],
-                "Resource": [f"arn:aws:s3:::{minio_config.bucket_name}/*"]
+                "Action": "s3:GetObject",
+                "Resource": f"arn:aws:s3:::{minio_config.bucket_name}/*",
             }
         ]
     }
@@ -27,7 +32,12 @@ try:
     client.set_bucket_policy(minio_config.bucket_name, json.dumps(policy))
 
 except Exception as e:
-    print(f"Minio init failed:{e}")
+    logging.error(f"Minio连接失败,错误原因{e}")
     client = None
+
+
 def get_minio_client():
     return client
+
+if __name__ == "__main__":
+    get_minio_client()

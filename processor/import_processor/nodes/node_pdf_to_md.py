@@ -2,17 +2,15 @@ import logging
 import shutil
 import time
 import zipfile
-from idlelib.rpc import response_queue
 from pathlib import Path
 
 import requests
-from pydantic.v1 import ConfigError
 
 from processor.import_processor.base import BaseNode, setup_logging
 from processor.import_processor.exceptions import StateFieldError, FileProcessingError, ConfigurationError, \
     PdfConversionError
 from processor.import_processor.state import ImportGraphState
-from processor.import_processor.configs.mineru_config import mineru_config
+from configs.mineru_config import mineru_config
 
 
 class NodePDFToMD(BaseNode):
