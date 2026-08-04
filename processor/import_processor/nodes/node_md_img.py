@@ -110,8 +110,7 @@ class NodeMDImg(BaseNode):
 
         return pre_text, post_text
 
-    def _step_3_generate_summaries(self, doc_stem: str, target_images: List[Tuple[str, str, Tuple[str, str]]]) -> Dict[
-        str, str]:
+    def _step_3_generate_summaries(self, doc_stem: str, target_images: List[Tuple[str, str, Tuple[str, str]]]) -> Dict[str, str]:
         """
                 步骤3：批量为待处理图片生成内容摘要，带API速率限制防止触发大模型限流
                 :param doc_stem: 文档文件名（不含后缀），作为大模型prompt上下文
@@ -128,8 +127,7 @@ class NodeMDImg(BaseNode):
             summaries[img_file] = self._summarize_image(image_path, root_folder=doc_stem, image_content=context)
         return summaries
 
-    def _apply_api_rate_limit(self, request_times: Deque[float], max_requests: int = 100,
-                              window_seconds: int = 60) -> None:
+    def _apply_api_rate_limit(self, request_times: Deque[float], max_requests: int = 100, window_seconds: int = 60) -> None:
         """
         通用滑动窗口API速率限制器（抽离为公共工具）
         核心逻辑：维护请求时间戳双端队列，窗口内请求数超上限则自动等待，防止触发第三方API限流
@@ -200,6 +198,7 @@ class NodeMDImg(BaseNode):
         except Exception as e:
             self.logger.error(f"图像总结失败：{image_path}, 错误{e}")
             return "图片描述"
+
 
 if __name__ == "__main__":
     setup_logging()
