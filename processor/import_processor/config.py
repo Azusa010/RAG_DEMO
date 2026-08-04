@@ -1,4 +1,4 @@
-# knowledge/processor/import_process/config.py
+# knowledge/processor/import_process/configs.py
 
 """
 导入流程配置管理模块
