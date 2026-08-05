@@ -1,0 +1,23 @@
+[project]
+name = "hello-rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "flagembedding>=1.4.0",
+    "pymilvus[model]>=3.0.1",
+    "torch==2.13.0",
+    "transformers>=4.45.0,<5.0.0",
+]
+
+[tool.uv.sources]
+# 强制从 NVIDIA 源安装
+torch = { index = "pytorch-cuda" }
+torchvision = { index = "pytorch-cuda" }
+torchaudio = { index = "pytorch-cuda" }
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
