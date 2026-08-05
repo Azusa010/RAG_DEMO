@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Tuple, List, Dict
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -12,6 +13,7 @@ from processor.import_processor.state import ImportGraphState
 
 DEFAULT_MAX_CONTENT_LENGTH = 2000
 MIN_CONTENT_LENGTH = 500
+
 
 class NodeDocumentSplit(BaseNode):
     """
@@ -49,6 +51,11 @@ class NodeDocumentSplit(BaseNode):
         # 输出：有标题则返回步骤2的章节列表；无标题则将全文封装为单个「无标题」章节，保证数据格式统一
         sections = self._step_3_handle_no_title(content, sections, title_count, file_title)
 
+        sections = self._step_4_refine_chunks(sections)
+
+        self._step_5_print_stats(lines_count, sections)
+
+        self._step_6_backup(state, sections)
         return state
 
     def _step_1_get_inputs(self, state: ImportGraphState) -> Tuple[str, str]:
@@ -105,10 +112,10 @@ class NodeDocumentSplit(BaseNode):
             stripped_line = line.strip()
             code_block_marker_match = re.match(r'^(`{3,}|~{3,})$', stripped_line)
             if code_block_marker_match:
-                marker  = code_block_marker_match.group(1)
+                marker = code_block_marker_match.group(1)
                 if not in_code_block:
                     in_code_block = True
-                    code_block_start_marker  = marker
+                    code_block_start_marker = marker
                 elif in_code_block and stripped_line == code_block_start_marker:
                     in_code_block = False
                     code_block_start_marker = None
@@ -125,10 +132,12 @@ class NodeDocumentSplit(BaseNode):
             else:
                 current_lines.append(line)
         _flush_section()
-        self.logger.info(f"文档粗切（按标题切分）完成，共{len(sections)}个章节，标题数量是{title_count}，文本共有{len(lines)}行")
+        self.logger.info(
+            f"文档粗切（按标题切分）完成，共{len(sections)}个章节，标题数量是{title_count}，文本共有{len(lines)}行")
         return sections, title_count, len(lines)
 
-    def _step_3_handle_no_title(self,content:str,sections:List[Dict[str, str]],title_count:int,file_title:str) -> List[Dict[str, str]]:
+    def _step_3_handle_no_title(self, content: str, sections: List[Dict[str, str]], title_count: int,
+                                file_title: str) -> List[Dict[str, str]]:
         """
         【步骤3】无标题兜底处理
         功能：若MD中未识别到任何标题，将全文作为一个整体处理，避免后续逻辑异常
@@ -140,21 +149,34 @@ class NodeDocumentSplit(BaseNode):
         """
         if title_count == 0:
             self.logger.warning(f"步骤3：未识别到任何MD标题，将全文作为单个章节处理，文件：{file_title}")
-            return [{"title":"无标题","content":content,"file_title":file_title}]
+            return [{"title": "无标题", "content": content, "file_title": file_title}]
         self.logger.debug(f"步骤3：检测到{title_count}个有效标题，无需兜底处理")
         return sections
 
-    def _step_4_refine_chunks(self,sections: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def _step_4_refine_chunks(self, sections: List[Dict[str, str]]) -> List[Dict[str, str]]:
         refined_split = []
         for sec in sections:
             refined_split.extend(self._split_long_section(sec))
         self.logger.info(f"步骤4-1：超长章节切分完成，共生成{len(refined_split)}个初始子Chunk")
-    def _split_long_section(self,section: Dict[str, str]) -> List[Dict[str, str]]:
-        content = section.get("content","")
+
+        # 短文本合并
+        final_sections = self._merge_short_sections(refined_split)
+
+        self.logger.info(f"步骤4-2：过短章节合并完成，最终得到{len(final_sections)}个Chunk")
+
+        for sec in final_sections:
+            if not sec.get("parent_title"):
+                sec["parent_title"] = sec.get("title") or ""
+        self.logger.debug(f"步骤4-3：父标题兜底完成，所有Chunk均包含parent_title字段")
+
+        return final_sections
+
+    def _split_long_section(self, section: Dict[str, str]) -> List[Dict[str, str]]:
+        content = section.get("content", "")
         if len(content) <= DEFAULT_MAX_CONTENT_LENGTH:
             return [section]
 
-        title = section.get("title","")
+        title = section.get("title", "")
         prefix = f"{title}\n\n" if title else ""
         available_len = DEFAULT_MAX_CONTENT_LENGTH - len(prefix)
         if available_len < 0:
@@ -162,7 +184,7 @@ class NodeDocumentSplit(BaseNode):
             return [section]
         body = content
         if title and body.lstrip().startswith(title):
-            body = body[body.find(title)+len(title):].lstrip()
+            body = body[body.find(title) + len(title):].lstrip()
 
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=available_len,
@@ -171,28 +193,76 @@ class NodeDocumentSplit(BaseNode):
         )
 
         sub_sections = []
-        for idx,chunk in enumerate(splitter.split_text(body), start=1):
+        for idx, chunk in enumerate(splitter.split_text(body), start=1):
             text = chunk.strip()
             if not text:
                 continue
 
-            full_text = (prefix+body).strip()
+            full_text = (prefix + body).strip()
 
             sub_sections.append({
                 "title": f"{title}-{idx}" if title else f"chunk-{idx}",
                 "content": full_text,
-                "parent_title":title,
-                "part":idx,
+                "parent_title": title,
+                "part": idx,
                 "file_title": section.get("file_title"),
             })
 
-        self.self.logger.debug(f"超长章节切分完成：{title} → 生成{len(sub_sections)}个子Chunk")
+        self.logger.debug(f"超长章节切分完成：{title} → 生成{len(sub_sections)}个子Chunk")
         return sub_sections
 
+    def _merge_short_sections(self, sections: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        if not sections:
+            self.logger.debug("待合并Chunk列表为空，直接返回")
+            return []
 
-    def _merge_short_sections(self):
-        pass
+        merged_sections = []
+        current_chunk = None
 
+        for sec in sections:
+            if current_chunk is None:
+                current_chunk = sec
+                continue
+
+            is_current_short = len(current_chunk["title"]) < MIN_CONTENT_LENGTH
+            is_same_parent =  current_chunk.get("parent_title") == sec.get("parent_title")
+
+            if is_current_short and is_same_parent:
+                parent_title = sec.get("parent_title", "")
+                next_chunk = sec["content"]
+                if parent_title and next_chunk.startswith(parent_title):
+                    next_chunk = next_chunk[len(parent_title):].lstrip()
+                current_chunk["content"] += '\n\n' + next_chunk
+
+                if "part" in sec:
+                    current_chunk["part"] = sec["part"]
+                self.logger.debug(
+                    f"合并短Chunk：{current_chunk.get('parent_title')} → 累计长度{len(current_chunk['content'])}")
+            else:
+                merged_sections.append(current_chunk)
+                current_chunk = sec
+
+        if current_chunk is not None:
+            merged_sections.append(current_chunk)
+
+        self.logger.debug(f"短Chunk合并完成：原{len(sections)}个 → 合并后{len(merged_sections)}个")
+        return merged_sections
+
+    def _step_5_print_stats(self, lines_count: int, sections: List[Dict[str, str]]) -> None:
+        chunk_num = len(sections)
+        self.logger.info("-" * 50 + " 文档切分统计信息 " + "-" * 50)
+        self.logger.info(f"MD原始文本总行数：{lines_count}")
+        self.logger.info(f"最终生成Chunk数量：{chunk_num}")
+
+    def _step_6_backup(self, state: ImportGraphState, sections: List[Dict[str, str]]) -> None:
+        backup_path = Path(state["md_path"]).parent / "chunks.json"
+
+        try:
+            with open(backup_path, 'w') as f:
+                json.dump(sections, f, ensure_ascii=False, indent=2)
+            self.logger.info(f"步骤6：Chunk结果备份成功，备份文件路径：{backup_path}")
+        except Exception as e:
+            self.logger.error(f"步骤6：Chunk结果备份失败，错误信息：{str(e)}", exc_info=False)
 
 
 if __name__ == "__main__":
