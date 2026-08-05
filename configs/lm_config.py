@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import os
 from dataclasses import dataclass
 
+load_dotenv()
 
 @dataclass
 class LLMConfig:
