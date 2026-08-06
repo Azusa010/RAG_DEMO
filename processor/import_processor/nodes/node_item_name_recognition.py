@@ -6,12 +6,17 @@ from typing import Tuple, List, Dict
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
+from pymilvus import MilvusClient, DataType
 from scipy.optimize import bracket
+from torchgen.api.cpp import return_names
 
 from configs.lm_config import lm_config
+from configs.milvus_config import milvus_config
 from processor.import_processor.base import BaseNode, setup_logging
 from processor.import_processor.exceptions import StateFieldError
 from processor.import_processor.state import ImportGraphState
+from processor.utils.embedding_utils import generate_embeddings
+from processor.utils.milvus_utils import get_milvus_client, escape_milvus_string
 
 
 class NodeItemNameRecognition(BaseNode):
@@ -31,17 +36,17 @@ class NodeItemNameRecognition(BaseNode):
         # 步骤3：调用大模型识别商品名称
         item_name = self._step_3_call_llm(file_title, context)
 
-        # # 步骤4：回填商品名称到状态和切片
-        # self._step_4_update_chunks(state, chunks, item_name)
+        # 步骤4：回填商品名称到状态和切片
+        self._step_4_update_chunks(state, chunks, item_name)
         #
-        # # 步骤5：为商品名称生成稠密/稀疏向量
-        # dense_vector, sparse_vector = self._step_5_generate_vectors(item_name)
+        # 步骤5：为商品名称生成稠密/稀疏向量
+        dense_vector, sparse_vector = self._step_5_generate_vectors(item_name)
         #
-        # # 步骤6：将数据存入Milvus向量数据库
-        # self._step_6_save_to_milvus(state, file_title, item_name, dense_vector, sparse_vector)
+        # 步骤6：将数据存入Milvus向量数据库
+        self._step_6_save_to_milvus(state, file_title, item_name, dense_vector, sparse_vector)
         #
-        # # 打印识别结果
-        # self.logger.info(f"--- 识别完成: {item_name} ---")
+        # 打印识别结果
+        self.logger.info(f"--- 识别完成: {item_name} ---")
 
         return state
 
@@ -60,9 +65,9 @@ class NodeItemNameRecognition(BaseNode):
         return file_title, chunks
 
     def _step_2_build_context(self, chunks: List[Dict]) -> str:
-        parts:List[str] = []
+        parts: List[str] = []
         total_chars = 0
-        for idx,chunk in enumerate(chunks[:self.config.item_name_chunk_k],start=1):
+        for idx, chunk in enumerate(chunks[:self.config.item_name_chunk_k], start=1):
             chunk_title = chunk.get("title").strip()
             chunk_content = chunk.get("content").strip()
 
@@ -79,7 +84,7 @@ class NodeItemNameRecognition(BaseNode):
         final_context = context[:self.config.item_name_chunk_size]
         return final_context
 
-    def _step_3_call_llm(self, file_title:str, context:str) -> str:
+    def _step_3_call_llm(self, file_title: str, context: str) -> str:
         if not context:
             return file_title
         try:
@@ -97,10 +102,10 @@ class NodeItemNameRecognition(BaseNode):
 """
             model = init_chat_model(
                 model=lm_config.llm_model,
-                base_url = lm_config.base_url,
+                base_url=lm_config.base_url,
                 model_provider="openai",
                 temperature=lm_config.llm_temperature,
-                extra_body ={"enable_thinking":False},
+                extra_body={"enable_thinking": False},
             )
 
             messages = [
@@ -117,12 +122,132 @@ class NodeItemNameRecognition(BaseNode):
                          .replace("\r", ""))
 
             if not item_name:
-                return  file_title
+                return file_title
             return item_name
 
         except Exception as e:
             self.logger.error(f"大模型调用异常：{e}")
             return file_title
+
+    def _step_4_update_chunks(self, state: ImportGraphState, chunks: List[Dict[str, str]], item_name: str):
+
+        state["item_name"] = item_name
+
+        for chunk in chunks:
+            chunk["title"] = item_name
+
+        state["chunks"] = chunks
+
+    def _step_5_generate_vectors(self, item_name: str) -> Tuple[List, Dict]:
+        if not item_name:
+            return None, None
+
+        vectors = generate_embeddings([item_name])
+        return vectors["dense"][0], vectors["sparse"][0]
+
+    def _step_6_save_to_milvus(self, state: ImportGraphState, file_title: str, item_name: str, dense_vector,
+                               sparse_vector):
+        try:
+            # 获取milvus客户端
+            milvus_client = get_milvus_client()
+            if not milvus_client:
+                self.logger.warning("无法获取 Milvus 客户端（连接失败），跳过数据保存")
+                return
+
+            # 集合初始化
+            collection_name = milvus_config.item_name_collection
+            if not milvus_client.has_collection(collection_name):
+                self._create_item_name_collection(collection_name, milvus_client)
+
+            # 幂等性处理
+
+            safe_item_value = escape_milvus_string(file_title)
+            filter_expr = f"item_name=='{safe_item_value}'"
+
+            milvus_client.delete(collection_name=collection_name, filter=filter_expr)
+
+            # 数据插入
+            data = {
+                "file_title": file_title,
+                "item_name": item_name,
+            }
+
+            if dense_vector is not None:
+                data["dense_vector"] = dense_vector
+            if sparse_vector is not None:
+                data["sparse_vector"] = sparse_vector
+            milvus_client.insert(collection_name=collection_name, data=data)
+
+            state["item_name"] = item_name
+
+        except Exception as e:
+            self.logger.warning(f"数据存入Milvus失败，原因：{str(e)}", exc_info=True)
+
+    def _create_item_name_collection(self, collection_name: str, milvus_client: MilvusClient):
+        schema = milvus_client.create_schema(auto_id=True, enable_dynamic_field=True)
+
+        schema.add_field(
+            field_name="pk",
+            datatype=DataType.INT64,
+            is_primary=True,
+            auto_id=True,
+        )
+
+        schema.add_field(
+            field_name="file_title",
+            datatype=DataType.VARCHAR,
+            max_length=100,
+        )
+
+        schema.add_field(
+            field_name="item_name",
+            datatype=DataType.VARCHAR,
+            max_length=100
+        )
+
+        schema.add_field(
+            field_name="dense_vector",
+            datatype=DataType.FLOAT_VECTOR,
+            dim=1024
+        )
+
+        schema.add_field(
+            field_name="sparse_vector",
+            datatype=DataType.SPARSE_FLOAT_VECTOR,
+
+        )
+
+        index_params = milvus_client.prepare_index_params()
+
+        index_params.add_index(
+            field_name="dense_vector",
+            index_name="dense_vector_index",
+            index_type="IVF_FLAT",
+            metric_type="COSINE",
+            params={"nlist": 128},
+
+        )
+
+        index_params.add_index(
+            field_name="sparse_vector",
+            index_name="sparse_vector_index",
+            index_type="SPARSE_INVERTED_INDEX",
+            metric_type="IP",
+            params={
+                "inverted_index_algo": "DAAT_MAXSCORE",
+                "normalize": True,
+                "quantization": "none"
+            }
+        )
+
+        milvus_client.create_collection(
+            collection_name=collection_name,
+            schema=schema,
+            index_params=index_params,
+        )
+
+
+
 
 if __name__ == "__main__":
     setup_logging()
