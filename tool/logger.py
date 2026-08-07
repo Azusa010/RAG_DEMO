@@ -8,7 +8,7 @@ logger.setLevel(logging.INFO)
 #定义日志记录器的颜色和格式
 handler = colorlog.StreamHandler()
 handler.setFormatter(colorlog.ColoredFormatter(
-    '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    '%(log_color)s%(asctime)s - %(filename)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     log_colors={
         'DEBUG': 'cyan',
