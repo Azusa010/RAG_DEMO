@@ -128,7 +128,7 @@ class NodeImportMilvus(BaseNode):
 
         result = client.insert(collection_name=milvus_config.chunks_collection, data=chunks_json_data)
 
-        insert_idx = result.get("idx")
+        insert_idx = result.get("ids")
         for i,chunk in enumerate(chunks_json_data):
             chunk["chunk_id"] = insert_idx[i]
 
