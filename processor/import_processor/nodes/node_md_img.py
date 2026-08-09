@@ -39,7 +39,7 @@ class NodeMDImg(BaseNode):
             self.logger.info("无图片文件夹，跳过图片处理")
             return state
 
-        target_images = self._step_2_scan_images(state, images_dir)
+        target_images = self._step_2_scan_images(md_content, images_dir)
         # 生成摘要
         if not target_images:
             self.logger.info("无可处理图片，跳过生成摘要")
@@ -77,7 +77,7 @@ class NodeMDImg(BaseNode):
 
         return md_content, md_path_obj, images_dir
 
-    def _step_2_scan_images(self, state: ImportGraphState, images_dir: Path) -> List[Tuple[str, str, Tuple[str, str]]]:
+    def _step_2_scan_images(self, md_content: str, images_dir: Path) -> List[Tuple[str, str, Tuple[str, str]]]:
         """
                 扫描图片文件夹，过滤出「支持格式+MD中实际引用」的图片，组装处理元数据
                 :param md_content: MD文件完整内容

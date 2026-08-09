@@ -24,7 +24,7 @@ class NodePDFToMD(BaseNode):
         # 下载与解压
         md_path = self._step_3_download_and_extract(zip_url,file_path_obj,pdf_path_obj.stem)
 
-        with open(md_path, "rb") as f:
+        with open(md_path, "r",encoding="utf-8") as f:
             md_content = f.read()
         state["md_path"] = str(md_path)
         state["md_content"] = md_content
@@ -33,14 +33,14 @@ class NodePDFToMD(BaseNode):
 
     def step_1_validate_pdf(self, state: ImportGraphState):
         pdf_path = state.get("pdf_path")
-        file_path = state.get("file_dir")
+        file_dir = state.get("file_dir")
         if not pdf_path:
             raise StateFieldError(field_name="pdf_path", expected_type=str)
-        if not file_path:
+        if not file_dir:
             raise StateFieldError(field_name="pdf_path", expected_type=str)
 
         pdf_path_obj = Path(pdf_path)
-        file_path_obj = Path(file_path)
+        file_path_obj = Path(file_dir)
 
         if not pdf_path_obj.exists():
             raise FileProcessingError(message=f"{pdf_path_obj.name}不存在")

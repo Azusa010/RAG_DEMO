@@ -25,7 +25,6 @@ class KBImportWorkflow:
         """
         self._compiled_graph = None
 
-
     @property
     def graph(self):
         """
@@ -37,20 +36,19 @@ class KBImportWorkflow:
             self._compiled_graph = self.build_graph()
         return self._compiled_graph
 
-
     def build_graph(self):
 
         # 1.初始化图（工作流）
-        graph = StateGraph (ImportGraphState)
+        graph = StateGraph(ImportGraphState)
 
         # 2.在图中注册节点
-        graph.add_node("node_entry", NodeEntry())#入口：判断文档类型
-        graph.add_node("node_pdf_to_md", NodePDFToMD())#pdf转换为markdown
-        graph.add_node("node_md_img", NodeMDImg())#解析文档中的图片的含义，并将其嵌入文档中
-        graph.add_node("node_document_split", NodeDocumentSplit())#文档切分
-        graph.add_node("node_item_name_recognition", NodeItemNameRecognition())#识别商品名称
-        graph.add_node("node_bge_embedding", NodeBGEEmbedding())#将文本转成向量
-        graph.add_node("node_import_milvus", NodeImportMilvus())#将向量和标量存入milvus
+        graph.add_node("node_entry", NodeEntry())  # 入口：判断文档类型
+        graph.add_node("node_pdf_to_md", NodePDFToMD())  # pdf转换为markdown
+        graph.add_node("node_md_img", NodeMDImg())  # 解析文档中的图片的含义，并将其嵌入文档中
+        graph.add_node("node_document_split", NodeDocumentSplit())  # 文档切分
+        graph.add_node("node_item_name_recognition", NodeItemNameRecognition())  # 识别商品名称
+        graph.add_node("node_bge_embedding", NodeBGEEmbedding())  # 将文本转成向量
+        graph.add_node("node_import_milvus", NodeImportMilvus())  # 将向量和标量存入milvus
 
         # 3. 设置入口节点
         graph.set_entry_point("node_entry")
@@ -59,10 +57,10 @@ class KBImportWorkflow:
             "node_entry",
             self.route_after_entry,
             {
-                #key：路由函数的返回值，value：节点的名字
-                "node_pdf_to_md":"node_pdf_to_md",
-                "node_md_img":"node_md_img",
-                END:END
+                # key：路由函数的返回值，value：节点的名字
+                "node_pdf_to_md": "node_pdf_to_md",
+                "node_md_img": "node_md_img",
+                END: END
             }
         )
 
@@ -96,12 +94,14 @@ class KBImportWorkflow:
         else:
             return self.graph.invoke(state)
 
-if __name__ == "__main__":
 
-    #激活全局日志
+if __name__ == "__main__":
+    # 激活全局日志
     setup_logging()
 
-    init_state = {"import_file_path": "一个文件.pdf"}
+    init_state = {
+        "import_file_path": r"D:\qdd\hello_RAG\processor\doc\Aolynk CB304n Cable网桥 用户手册-5W100-整本手册.pdf",
+        "file_dir": r"D:\qdd\hello_RAG\processor\output", }
     workflow = KBImportWorkflow()
     final_state = workflow.run(init_state)
 
