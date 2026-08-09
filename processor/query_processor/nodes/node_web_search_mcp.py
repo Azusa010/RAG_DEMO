@@ -1,5 +1,12 @@
+import asyncio
+import json
+
+from agents.mcp import MCPServerStreamableHttp
+
+from configs.mcp_config import mcp_config
 from processor.query_processor.base import NodeBase
 from processor.query_processor.state import QueryGraphState
+from processor.utils.serialize_json import serialize_json
 from tool.logger import logger
 
 
@@ -18,8 +25,55 @@ class NodeWebSearchMcp(NodeBase):
         :return: 更新后的状态对象
         """
 
-        # TODO
-        logger.info(f"【{self.name}】节点逻辑")
+        query = state.get("rewritten_query", "")
+        docs = []
+        if query:
+            result = asyncio.run(self._mcp_call(query))
+            if result:
+                pages = json.loads(result.content[0].text).get("results") or []
+                for item in pages:
+                    content = (item.get("content") or "").strip()
+                    title = (item.get("title") or "").strip()
+                    url = (item.get("url") or "").strip()
+                    if not content:
+                        continue
+                    docs.append({"title": title, "url": url, "content": content})
+                logger.info(
+                    "MCP 搜索结果:\n%s",
+                    serialize_json(docs, indent=4),
+                )
+        if docs:
+            return {"web_search_docs": docs}
+        return {}
+    async def _mcp_call(self,query):
+        search_mcp = MCPServerStreamableHttp(
+            name="search_mcp",
+            params={
+                "url":f"{mcp_config.mcp_base_url}?tavilyApiKey={mcp_config.api_key}"
+            },
+            cache_tools_list=True,
+            max_retry_attempts=3,
+        )
 
-        # return state
-        return {"web_search_docs": []}
+        try:
+            await search_mcp.connect()
+            result = await search_mcp.call_tool(
+                tool_name="tavily_search",
+                arguments={"query": query,"max_results":5},
+            )
+            return result
+        finally:
+            await search_mcp.cleanup()
+
+
+
+if __name__ == "__main__":
+
+    init_state = {
+        "rewritten_query": "关于brother HAK180烫金机，如何调节转印温度？"
+    }
+
+    # 执行节点的业务调用
+    node_web_search_mcp = NodeWebSearchMcp()
+    result = node_web_search_mcp(init_state)
+    logger.info(serialize_json(result, indent=4))
