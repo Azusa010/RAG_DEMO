@@ -49,8 +49,19 @@ def create_hybrid_search_requests(dense_vector, sparse_vector, dense_params=None
     return [dense_req, sparse_req]
 
 
-def hybrid_search(client, collection_name, reqs, ranker_weights=(0.5, 0.5), norm_score=False, limit=5,
-                  output_fields=None, search_params=None):
+def hybrid_search(
+        client,
+        collection_name,
+        reqs,
+        ranker_weights=(0.5, 0.5),
+        norm_score=False,
+        limit=5,
+        output_fields=None,
+        search_params=None):
+    stats = client.get_collection_stats(collection_name)
+    if int(stats.get("row_count", 0)) == 0:
+        logger.warning(f"Milvus集合[{collection_name}]为空，跳过混合检索")
+        return [[]]
     try:
         rerank = WeightedRanker(ranker_weights[0], ranker_weights[1], norm_score=norm_score)
         if output_fields is None:
