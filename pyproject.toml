@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "fastapi>=0.141.1",
     "flagembedding>=1.4.0",
     "logger",
     "openai-agents>=0.19.4",
