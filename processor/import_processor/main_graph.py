@@ -90,7 +90,7 @@ class KBImportWorkflow:
     def run(self, state: ImportGraphState, stream: bool = False):
 
         if stream:
-            return self.graph.stream(state, stream_mode="values")
+            return self.graph.stream(state)
         else:
             return self.graph.invoke(state)
 

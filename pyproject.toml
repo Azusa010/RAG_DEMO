@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "datetime>=6.0",
     "fastapi>=0.141.1",
+    "file>=0.3.0",
     "flagembedding>=1.4.0",
     "logger",
     "openai-agents>=0.19.4",
@@ -13,6 +15,7 @@ dependencies = [
     "scipy-stubs~=1.18.0",
     "torch==2.13.0",
     "transformers>=4.45.0,<5.0.0",
+    "uuid>=1.30",
 ]
 
 [tool.uv.sources]

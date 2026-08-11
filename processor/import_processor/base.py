@@ -9,6 +9,7 @@ import colorlog
 
 from processor.import_processor.config import ImportConfig, get_config
 from processor.import_processor.exceptions import ImportProcessError
+from processor.utils.task_utils import add_running_task, add_done_task
 
 """
 导入流程节点基类
@@ -94,8 +95,14 @@ class BaseNode(ABC):
             # 1. 开始准备执行节点（任务追踪）
             self.logger.info(f"--- {self.name} 开始啦 ---")
 
+            # 开始：记录节点运行状态
+            add_running_task(state["task_id"], self.name)
+
             # 2. 执行节点
             result = self.process(state)
+
+            # 结束：记录节点完成状态
+            add_done_task(state["task_id"], self.name)
 
             # 3. 执行节点成功（任务追踪）
             self.logger.info(f"--- {self.name} 完成啦 ---")
