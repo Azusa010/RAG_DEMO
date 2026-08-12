@@ -134,7 +134,7 @@ class NodeItemNameRecognition(BaseNode):
         state["item_name"] = item_name
 
         for chunk in chunks:
-            chunk["title"] = item_name
+            chunk["item_name"] = item_name
 
         state["chunks"] = chunks
 

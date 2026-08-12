@@ -489,6 +489,12 @@ wheels = [
 ]
 
 [[package]]
+name = "field"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/51/55bd7485e2b45cd1f4cfb95526a478e956979ae71d080feadcde14c020fe/field-0.2.0.tar.gz", hash = "sha256:29394bc076ac37e1b40aa5d9249d8a60056f244bf6167d29cc66ec9d6b7dd182", size = 18325, upload-time = "2015-04-08T00:08:42.168Z" }
+
+[[package]]
 name = "file"
 version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -677,6 +683,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "datetime" },
     { name = "fastapi" },
+    { name = "field" },
     { name = "file" },
     { name = "flagembedding" },
     { name = "logger" },
@@ -692,6 +699,7 @@ dependencies = [
 requires-dist = [
     { name = "datetime", specifier = ">=6.0" },
     { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "field", specifier = ">=0.2.0" },
     { name = "file", specifier = ">=0.3.0" },
     { name = "flagembedding", specifier = ">=1.4.0" },
     { name = "logger" },

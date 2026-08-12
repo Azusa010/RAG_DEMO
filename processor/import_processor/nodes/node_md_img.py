@@ -140,7 +140,7 @@ class NodeMDImg(BaseNode):
             summaries[img_file] = self._summarize_image(image_path, root_folder=doc_stem, image_content=context)
         return summaries
 
-    def _apply_api_rate_limit(self, request_times: Deque[float], max_requests: int = 100,
+    def _apply_api_rate_limit(self, request_times: Deque[float], max_requests: int = 10,
                               window_seconds: int = 60) -> None:
         """
         通用滑动窗口API速率限制器（抽离为公共工具）
